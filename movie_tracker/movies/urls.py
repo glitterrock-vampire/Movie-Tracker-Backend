@@ -17,4 +17,6 @@ urlpatterns = [
     path('genres/', views.get_genres, name='genres-list'),
     path('genres/<int:genre_id>/movies/', views.get_movies_by_genre, name='movies-by-genre'),
     path('recommendations/', views.get_recommendations, name='recommendations'),
+    path('movies/now_showing/', views.get_now_showing_movies, name='now-showing-movies'),
+    path('movies/popular/', views.get_popular_movies, name='popular-movies'),
 ]

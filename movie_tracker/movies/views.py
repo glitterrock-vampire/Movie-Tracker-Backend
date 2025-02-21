@@ -509,3 +509,70 @@ def get_recommendations(request):
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+@api_view(['GET'])
+def get_now_showing_movies(request):
+    tmdb = TMDBService()
+    page = request.GET.get('page', 1)
+    try:
+        # TMDB's 'now_playing' endpoint
+        data = tmdb._make_request('movie/now_playing', {'page': page})
+        results = data.get('results', [])
+
+        # Create or update Movie objects in your DB
+        movies = []
+        for result in results:
+            movie, created = Movie.objects.get_or_create(
+                tmdb_id=result['id'],
+                defaults={
+                    'title': result['title'],
+                    'overview': result.get('overview', ''),
+                    'poster_path': result.get('poster_path', ''),
+                    'backdrop_path': result.get('backdrop_path', ''),
+                    'release_date': result.get('release_date'),
+                    'vote_average': result.get('vote_average'),
+                }
+            )
+            movies.append(movie)
+
+        serializer = MovieSerializer(movies, many=True)
+        return Response({
+            'results': serializer.data,
+            'page': data.get('page', 1),
+            'total_pages': data.get('total_pages', 1)
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def get_popular_movies(request):
+    tmdb = TMDBService()
+    page = request.GET.get('page', 1)
+    try:
+        # TMDB's 'popular' endpoint
+        data = tmdb.get_popular_movies(page=page)  # or your custom method
+        results = data.get('results', [])
+
+        # Create or update Movie objects in your DB
+        movies = []
+        for result in results:
+            movie, created = Movie.objects.get_or_create(
+                tmdb_id=result['id'],
+                defaults={
+                    'title': result['title'],
+                    'overview': result.get('overview', ''),
+                    'poster_path': result.get('poster_path', ''),
+                    'backdrop_path': result.get('backdrop_path', ''),
+                    'release_date': result.get('release_date'),
+                    'vote_average': result.get('vote_average'),
+                }
+            )
+            movies.append(movie)
+
+        serializer = MovieSerializer(movies, many=True)
+        return Response({
+            'results': serializer.data,
+            'page': data.get('page', 1),
+            'total_pages': data.get('total_pages', 1)
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
