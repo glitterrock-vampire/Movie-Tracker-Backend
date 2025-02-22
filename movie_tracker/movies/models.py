@@ -1,6 +1,35 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import MinValueValidator, MaxValueValidator
+
+# Custom User Manager for email authentication
+class CustomUserManager(BaseUserManager):
+    def create_user(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError('The Email field must be set')
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        return self.create_user(email, password, **extra_fields)
+
+# Custom User Model for email authentication
+class CustomUser(AbstractUser):
+    username = None
+    email = models.EmailField('email address', unique=True)
+    
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = []
+
+    objects = CustomUserManager()
+
+    def __str__(self):
+        return self.email
 
 class Genre(models.Model):
     tmdb_id = models.IntegerField(unique=True)
@@ -55,7 +84,7 @@ class MovieCrew(models.Model):
         unique_together = ['movie', 'person', 'job']
 
 class UserMovie(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='watched_movies')
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='watched_movies')
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
     rating = models.IntegerField(
         null=True,
@@ -70,4 +99,4 @@ class UserMovie(models.Model):
         ordering = ['-watched_at']
 
     def __str__(self):
-        return f"{self.user.username} - {self.movie.title}"
+        return f"{self.user.email} - {self.movie.title}"

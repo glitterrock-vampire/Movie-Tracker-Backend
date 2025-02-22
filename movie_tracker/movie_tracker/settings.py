@@ -63,6 +63,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+AUTH_USER_MODEL = 'movies.CustomUser'  
 
 # TMDB Settings
 TMDB_API_KEY = '84541b939d582820bbfeb26a219afaae'
@@ -88,6 +89,9 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
+    'USER_ID_FIELD': 'id', 
+    'USER_ID_CLAIM': 'user_id', 
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',  # Add this line
 }
 
 # CORS settings

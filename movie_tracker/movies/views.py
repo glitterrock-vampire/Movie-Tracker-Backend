@@ -3,40 +3,37 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.contrib.auth.models import User
-from rest_framework_simplejwt.tokens import RefreshToken
-from .models import Movie, UserMovie, Person, Genre, MovieCrew, MovieCast
+from .models import CustomUser, Movie, UserMovie, Person, Genre, MovieCrew, MovieCast
 from .serializers import (
     MovieSerializer, UserMovieSerializer, PersonSerializer,
     GenreSerializer, MovieCastSerializer, MovieCrewSerializer
 )
 from .services import TMDBService
 
-
 @api_view(['POST'])
 @permission_classes([AllowAny])  # Explicitly allow any user to register
 def register(request):
     try:
-        username = request.data.get('username')
+        email = request.data.get('email')
         password = request.data.get('password')
-        email = request.data.get('email', '')
 
-        if not username or not password:
-            return Response({
-                'error': 'Username and password are required'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        if not email or not password:
+            return Response({'error': 'Email and password are required'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
 
-        if User.objects.filter(username=username).exists():
-            return Response({
-                'error': 'Username already exists'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Check if user already exists
+        if CustomUser.objects.filter(email=email).exists():
+            return Response({'error': 'User with this email already exists'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
 
-        user = User.objects.create_user(
-            username=username,
-            password=password,
-            email=email
+        # Create new user with CustomUser
+        user = CustomUser.objects.create_user(
+            email=email,
+            password=password
         )
 
+        # Generate JWT tokens
+        from rest_framework_simplejwt.tokens import RefreshToken
         refresh = RefreshToken.for_user(user)
 
         return Response({
@@ -48,9 +45,8 @@ def register(request):
         }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        return Response({
-            'error': str(e)
-        }, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': str(e)}, 
+                       status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 def search_movies(request):
@@ -64,7 +60,6 @@ def search_movies(request):
     tmdb = TMDBService()
     try:
         results = tmdb.search_movies(query)
-        # Store movies in our database for future reference
         movies = []
         for result in results.get('results', []):
             movie, created = Movie.objects.get_or_create(
@@ -91,20 +86,18 @@ def search_movies(request):
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
 @api_view(['GET'])
 def get_movie_details(request, tmdb_id):
     tmdb = TMDBService()
     try:
-        # First check our database
         try:
             movie = Movie.objects.get(tmdb_id=tmdb_id)
             needs_update = True
         except Movie.DoesNotExist:
-            # Get movie data from TMDB
             movie_data = tmdb._make_request(f'movie/{tmdb_id}')
             credits_data = tmdb._make_request(f'movie/{tmdb_id}/credits')
             
-            # Create the movie
             movie = Movie.objects.create(
                 tmdb_id=tmdb_id,
                 title=movie_data['title'],
@@ -115,7 +108,6 @@ def get_movie_details(request, tmdb_id):
                 vote_average=movie_data.get('vote_average')
             )
             
-            # Handle genres
             for genre_data in movie_data.get('genres', []):
                 genre, _ = Genre.objects.get_or_create(
                     tmdb_id=genre_data['id'],
@@ -123,8 +115,7 @@ def get_movie_details(request, tmdb_id):
                 )
                 movie.genres.add(genre)
             
-            # Handle cast
-            for cast_data in credits_data.get('cast', [])[:10]:  # Top 10 cast members
+            for cast_data in credits_data.get('cast', [])[:10]:
                 person, _ = Person.objects.get_or_create(
                     tmdb_id=cast_data['id'],
                     defaults={
@@ -139,7 +130,6 @@ def get_movie_details(request, tmdb_id):
                     order=cast_data['order']
                 )
             
-            # Handle crew
             for crew_data in credits_data.get('crew', []):
                 if crew_data['job'] in ['Director', 'Screenplay', 'Writer']:
                     person, _ = Person.objects.get_or_create(
@@ -158,11 +148,9 @@ def get_movie_details(request, tmdb_id):
             needs_update = False
         
         if needs_update:
-            # Update the movie with fresh data
             movie_data = tmdb._make_request(f'movie/{tmdb_id}')
             credits_data = tmdb._make_request(f'movie/{tmdb_id}/credits')
             
-            # Update basic info
             movie.title = movie_data['title']
             movie.overview = movie_data.get('overview', '')
             movie.poster_path = movie_data.get('poster_path', '')
@@ -171,7 +159,6 @@ def get_movie_details(request, tmdb_id):
             movie.vote_average = movie_data.get('vote_average')
             movie.save()
             
-            # Update genres
             movie.genres.clear()
             for genre_data in movie_data.get('genres', []):
                 genre, _ = Genre.objects.get_or_create(
@@ -180,7 +167,6 @@ def get_movie_details(request, tmdb_id):
                 )
                 movie.genres.add(genre)
             
-            # Update cast and crew
             MovieCast.objects.filter(movie=movie).delete()
             MovieCrew.objects.filter(movie=movie).delete()
             
@@ -215,7 +201,6 @@ def get_movie_details(request, tmdb_id):
                         department=crew_data['department']
                     )
         
-        # Serialize the response
         serializer = MovieSerializer(movie, context={'request': request})
         return Response(serializer.data)
     
@@ -224,6 +209,7 @@ def get_movie_details(request, tmdb_id):
             {"error": str(e)},
             status=status.HTTP_404_NOT_FOUND
         )
+
 @api_view(['GET'])
 def get_popular_movies(request):
     page = request.GET.get('page', 1)
@@ -262,7 +248,6 @@ def get_popular_movies(request):
 def add_to_collection(request, tmdb_id):
     tmdb = TMDBService()
     try:
-        # First check our database
         try:
             movie = Movie.objects.get(tmdb_id=tmdb_id)
         except Movie.DoesNotExist:
@@ -360,6 +345,7 @@ def rate_movie(request, tmdb_id):
             {"error": str(e)},
             status=status.HTTP_400_BAD_REQUEST
         )
+
 @api_view(['GET'])
 def search_people(request):
     query = request.GET.get('query', '')
@@ -373,7 +359,6 @@ def search_people(request):
     tmdb = TMDBService()
     try:
         results = tmdb.search_people(query, page=page)
-        # Store people in our database for future reference
         people = []
         for result in results.get('results', []):
             person, created = Person.objects.get_or_create(
@@ -396,6 +381,7 @@ def search_people(request):
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
 @api_view(['GET'])
 def get_movies_by_person(request, person_id):
     try:
@@ -425,7 +411,6 @@ def get_movies_by_person(request, person_id):
             {"error": str(e)},
             status=status.HTTP_404_NOT_FOUND
         )
-        
 
 @api_view(['GET'])
 def get_genres(request):
@@ -509,16 +494,15 @@ def get_recommendations(request):
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
 @api_view(['GET'])
 def get_now_showing_movies(request):
     tmdb = TMDBService()
     page = request.GET.get('page', 1)
     try:
-        # TMDB's 'now_playing' endpoint
         data = tmdb._make_request('movie/now_playing', {'page': page})
         results = data.get('results', [])
 
-        # Create or update Movie objects in your DB
         movies = []
         for result in results:
             movie, created = Movie.objects.get_or_create(
@@ -548,11 +532,9 @@ def get_popular_movies(request):
     tmdb = TMDBService()
     page = request.GET.get('page', 1)
     try:
-        # TMDB's 'popular' endpoint
-        data = tmdb.get_popular_movies(page=page)  # or your custom method
+        data = tmdb.get_popular_movies(page=page)
         results = data.get('results', [])
 
-        # Create or update Movie objects in your DB
         movies = []
         for result in results:
             movie, created = Movie.objects.get_or_create(
