@@ -120,7 +120,8 @@ def get_movie_details(request, tmdb_id):
                     tmdb_id=cast_data['id'],
                     defaults={
                         'name': cast_data['name'],
-                        'profile_path': cast_data.get('profile_path', '')
+                        'profile_path': cast_data.get('profile_path', '') or None 
+
                     }
                 )
                 MovieCast.objects.create(
@@ -249,7 +250,7 @@ def add_to_collection(request, tmdb_id):
     tmdb = TMDBService()
     try:
         try:
-            movie = Movie.objects.get(tmdb_id=tmdb_id)
+            movie = Movie.objects.get(tmdb_id=tmdb_id) 
         except Movie.DoesNotExist:
             movie_data = tmdb.get_movie_details(tmdb_id)
             movie = Movie.objects.create(
@@ -464,7 +465,7 @@ def get_movies_by_genre(request, genre_id):
         )
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_recommendations(request):
     try:
         tmdb = TMDBService()
