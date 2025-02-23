@@ -90,126 +90,52 @@ def search_movies(request):
 @api_view(['GET'])
 def get_movie_details(request, tmdb_id):
     tmdb = TMDBService()
-    try:
-        try:
-            movie = Movie.objects.get(tmdb_id=tmdb_id)
-            needs_update = True
-        except Movie.DoesNotExist:
-            movie_data = tmdb._make_request(f'movie/{tmdb_id}')
-            credits_data = tmdb._make_request(f'movie/{tmdb_id}/credits')
-            
-            movie = Movie.objects.create(
-                tmdb_id=tmdb_id,
-                title=movie_data['title'],
-                overview=movie_data.get('overview', ''),
-                poster_path=movie_data.get('poster_path', ''),
-                backdrop_path=movie_data.get('backdrop_path', ''),
-                release_date=movie_data.get('release_date'),
-                vote_average=movie_data.get('vote_average')
-            )
-            
-            for genre_data in movie_data.get('genres', []):
-                genre, _ = Genre.objects.get_or_create(
-                    tmdb_id=genre_data['id'],
-                    defaults={'name': genre_data['name']}
-                )
-                movie.genres.add(genre)
-            
-            for cast_data in credits_data.get('cast', [])[:10]:
-                person, _ = Person.objects.get_or_create(
-                    tmdb_id=cast_data['id'],
-                    defaults={
-                        'name': cast_data['name'],
-                        'profile_path': cast_data.get('profile_path', '')
-                    }
-                )
-                MovieCast.objects.create(
-                    movie=movie,
-                    person=person,
-                    character=cast_data['character'],
-                    order=cast_data['order']
-                )
-            
-            for crew_data in credits_data.get('crew', []):
-                if crew_data['job'] in ['Director', 'Screenplay', 'Writer']:
-                    person, _ = Person.objects.get_or_create(
-                        tmdb_id=crew_data['id'],
-                        defaults={
-                            'name': crew_data['name'],
-                            'profile_path': crew_data.get('profile_path', '')
-                        }
-                    )
-                    MovieCrew.objects.create(
-                        movie=movie,
-                        person=person,
-                        job=crew_data['job'],
-                        department=crew_data['department']
-                    )
-            needs_update = False
-        
-        if needs_update:
-            movie_data = tmdb._make_request(f'movie/{tmdb_id}')
-            credits_data = tmdb._make_request(f'movie/{tmdb_id}/credits')
-            
-            movie.title = movie_data['title']
-            movie.overview = movie_data.get('overview', '')
-            movie.poster_path = movie_data.get('poster_path', '')
-            movie.backdrop_path = movie_data.get('backdrop_path', '')
-            movie.release_date = movie_data.get('release_date')
-            movie.vote_average = movie_data.get('vote_average')
-            movie.save()
-            
-            movie.genres.clear()
-            for genre_data in movie_data.get('genres', []):
-                genre, _ = Genre.objects.get_or_create(
-                    tmdb_id=genre_data['id'],
-                    defaults={'name': genre_data['name']}
-                )
-                movie.genres.add(genre)
-            
-            MovieCast.objects.filter(movie=movie).delete()
-            MovieCrew.objects.filter(movie=movie).delete()
-            
-            for cast_data in credits_data.get('cast', [])[:10]:
-                person, _ = Person.objects.get_or_create(
-                    tmdb_id=cast_data['id'],
-                    defaults={
-                        'name': cast_data['name'],
-                        'profile_path': cast_data.get('profile_path', '')
-                    }
-                )
-                MovieCast.objects.create(
-                    movie=movie,
-                    person=person,
-                    character=cast_data['character'],
-                    order=cast_data['order']
-                )
-            
-            for crew_data in credits_data.get('crew', []):
-                if crew_data['job'] in ['Director', 'Screenplay', 'Writer']:
-                    person, _ = Person.objects.get_or_create(
-                        tmdb_id=crew_data['id'],
-                        defaults={
-                            'name': crew_data['name'],
-                            'profile_path': crew_data.get('profile_path', '')
-                        }
-                    )
-                    MovieCrew.objects.create(
-                        movie=movie,
-                        person=person,
-                        job=crew_data['job'],
-                        department=crew_data['department']
-                    )
-        
-        serializer = MovieSerializer(movie, context={'request': request})
-        return Response(serializer.data)
     
-    except Exception as e:
-        return Response(
-            {"error": str(e)},
-            status=status.HTTP_404_NOT_FOUND
+    try:
+        # Check if the movie already exists in DB
+        movie = Movie.objects.get(tmdb_id=tmdb_id)
+        needs_update = True
+    except Movie.DoesNotExist:
+        # Fetch from TMDB since it's missing in DB
+        movie_data = tmdb._make_request(f'movie/{tmdb_id}')
+        
+        if not movie_data or "title" not in movie_data:
+            return Response({"error": "Movie not found on TMDB"}, status=status.HTTP_404_NOT_FOUND)
+
+        movie = Movie.objects.create(
+            tmdb_id=tmdb_id,
+            title=movie_data['title'],
+            overview=movie_data.get('overview', ''),
+            poster_path=movie_data.get('poster_path', ''),
+            backdrop_path=movie_data.get('backdrop_path', ''),
+            release_date=movie_data.get('release_date'),
+            vote_average=movie_data.get('vote_average')
         )
 
+        # Handle genres
+        for genre_data in movie_data.get('genres', []):
+            genre, _ = Genre.objects.get_or_create(
+                tmdb_id=genre_data['id'],
+                defaults={'name': genre_data['name']}
+            )
+            movie.genres.add(genre)
+        
+        needs_update = False  # We just fetched fresh data, no update needed
+
+    # Fetch new data if needed
+    if needs_update:
+        movie_data = tmdb._make_request(f'movie/{tmdb_id}')
+        
+        movie.title = movie_data['title']
+        movie.overview = movie_data.get('overview', '')
+        movie.poster_path = movie_data.get('poster_path', '')
+        movie.backdrop_path = movie_data.get('backdrop_path', '')
+        movie.release_date = movie_data.get('release_date')
+        movie.vote_average = movie_data.get('vote_average')
+        movie.save()
+
+    serializer = MovieSerializer(movie, context={'request': request})
+    return Response(serializer.data)
 @api_view(['GET'])
 def get_popular_movies(request):
     page = request.GET.get('page', 1)
@@ -463,6 +389,71 @@ def get_movies_by_genre(request, genre_id):
             status=status.HTTP_404_NOT_FOUND
         )
 
+@api_view(['GET'])
+def get_movie_recommendations(request, tmdb_id):
+    tmdb = TMDBService()
+    try:
+        data = tmdb._make_request(f'movie/{tmdb_id}/recommendations')
+        results = data.get('results', [])
+
+        movies = []
+        for result in results:
+            movie, created = Movie.objects.get_or_create(
+                tmdb_id=result['id'],
+                defaults={
+                    'title': result['title'],
+                    'overview': result.get('overview', ''),
+                    'poster_path': result.get('poster_path', ''),
+                    'backdrop_path': result.get('backdrop_path', ''),
+                    'release_date': result.get('release_date'),
+                    'vote_average': result.get('vote_average'),
+                }
+            )
+            movies.append(movie)
+
+        serializer = MovieSerializer(movies, many=True, context={'request': request})
+        return Response({
+            'results': serializer.data,
+            'page': data.get('page', 1),
+            'total_pages': data.get('total_pages', 1)
+        })
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+        
+        
+@api_view(['GET'])
+def get_movie_videos(request, tmdb_id):
+    """
+    Fetches videos (trailers, teasers, etc.) for a specific movie from TMDB.
+    """
+    tmdb = TMDBService()
+    try:
+        response = tmdb._make_request(f'movie/{tmdb_id}/videos')
+        results = response.get('results', [])
+
+        videos = []
+        for video in results:
+            videos.append({
+                "id": video.get("id"),
+                "name": video.get("name"),
+                "key": video.get("key"),
+                "site": video.get("site"),
+                "type": video.get("type"),
+                "size": video.get("size"),
+                "official": video.get("official", False),
+                "published_at": video.get("published_at"),
+            })
+
+        return Response({
+            "tmdb_id": tmdb_id,
+            "videos": videos
+        })
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_recommendations(request):
