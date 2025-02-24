@@ -50,8 +50,8 @@ class Movie(models.Model):
     tmdb_id = models.IntegerField(unique=True)
     title = models.CharField(max_length=255)
     overview = models.TextField(blank=True)
-    poster_path = models.CharField(max_length=255, blank=True)
-    backdrop_path = models.CharField(max_length=255, blank=True)
+    poster_path = models.CharField(max_length=255, blank=True, null=True)
+    backdrop_path = models.CharField(max_length=255, blank=True, null=True)  # ✅ Allow NULL
     release_date = models.DateField(null=True, blank=True)
     vote_average = models.FloatField(null=True, blank=True)
     genres = models.ManyToManyField(Genre, related_name='movies')
@@ -63,6 +63,7 @@ class Movie(models.Model):
 
     def __str__(self):
         return self.title
+
 
 class MovieCast(models.Model):
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE)

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Movie, UserMovie, Genre, Person, MovieCast, MovieCrew
+from datetime import datetime
 
 class PersonSerializer(serializers.ModelSerializer):
     class Meta:
@@ -31,7 +32,18 @@ class MovieSerializer(serializers.ModelSerializer):
     crew = MovieCrewSerializer(source='moviecrew_set', many=True, read_only=True)
     user_rating = serializers.SerializerMethodField()
     in_collection = serializers.SerializerMethodField()
-    
+
+    # ✅ Fix: Allow null release dates and accept multiple formats
+    release_date = serializers.DateField(
+        required=False,  
+        allow_null=True,  # ✅ Allow NULL values
+        format="%Y-%m-%d",  # ✅ Ensure output is in YYYY-MM-DD
+        input_formats=[
+            "%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d",
+            "%d %b %Y", "%d %B %Y", None, "",  # ✅ Allow multiple formats
+        ]
+    )
+
     class Meta:
         model = Movie
         fields = [

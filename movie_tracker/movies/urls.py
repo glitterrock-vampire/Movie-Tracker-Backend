@@ -1,9 +1,18 @@
 from django.urls import path
 from . import views
+from rest_framework_simplejwt.views import (  # Add this import
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
 urlpatterns = [
+
+    path('register/', views.register, name='register'),  # or /api/register/
+    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('movies/search/', views.search_movies, name='search-movies'),
     path('movies/<int:tmdb_id>/', views.get_movie_details, name='movie-details'),
+    path("movies/<int:tmdb_id>/videos/", views.get_movie_videos, name="movie-videos"),
 
     path('movies/popular/', views.get_popular_movies, name='popular-movies'),
     path('collection/', views.get_collection, name='get-collection'),
@@ -19,3 +28,4 @@ urlpatterns = [
     path('recommendations/', views.get_recommendations, name='recommendations'),
     path('movies/now_showing/', views.get_now_showing_movies, name='now-showing-movies'),
 ]
+

@@ -1,6 +1,8 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework import generics
+
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from .models import CustomUser, Movie, UserMovie, Person, Genre, MovieCrew, MovieCast
@@ -9,6 +11,7 @@ from .serializers import (
     GenreSerializer, MovieCastSerializer, MovieCrewSerializer
 )
 from .services import TMDBService
+from datetime import datetime
 
 @api_view(['POST'])
 @permission_classes([AllowAny])  # Explicitly allow any user to register
@@ -56,36 +59,45 @@ def search_movies(request):
             {"error": "Search query is required"},
             status=status.HTTP_400_BAD_REQUEST
         )
-    
+
     tmdb = TMDBService()
     try:
         results = tmdb.search_movies(query)
         movies = []
         for result in results.get('results', []):
+            movie_data = {
+                'tmdb_id': result['id'],
+                'title': result['title'],
+                'overview': result.get('overview', ''),
+                'poster_path': result.get('poster_path', ''),
+                'backdrop_path': result.get('backdrop_path', ''),
+                'release_date': result.get('release_date'),
+                'vote_average': result.get('vote_average'),
+            }
+
+            # ✅ Apply the fix here
+            movie_data = clean_movie_data(movie_data)
+
+            # ✅ Use `get_or_create` safely
             movie, created = Movie.objects.get_or_create(
                 tmdb_id=result['id'],
-                defaults={
-                    'title': result['title'],
-                    'overview': result.get('overview', ''),
-                    'poster_path': result.get('poster_path', ''),
-                    'backdrop_path': result.get('backdrop_path', ''),
-                    'release_date': result.get('release_date'),
-                    'vote_average': result.get('vote_average'),
-                }
+                defaults=movie_data
             )
             movies.append(movie)
-        
+
         serializer = MovieSerializer(movies, many=True, context={'request': request})
         return Response({
             'results': serializer.data,
             'page': results.get('page', 1),
             'total_pages': results.get('total_pages', 1)
         })
+
     except Exception as e:
         return Response(
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
 
 @api_view(['GET'])
 def get_movie_details(request, tmdb_id):
@@ -465,7 +477,7 @@ def get_movies_by_genre(request, genre_id):
         )
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_recommendations(request):
     try:
         tmdb = TMDBService()
@@ -559,3 +571,47 @@ def get_popular_movies(request):
         })
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(["GET"])
+def get_movie_videos(request, tmdb_id):
+    tmdb = TMDBService()
+    try:
+        data = tmdb._make_request(f"movie/{tmdb_id}/videos")
+        return Response(data)
+    except Exception as e:
+        return Response({"error": str(e)}, status=404)
+    
+
+class MovieSearchView(generics.ListAPIView):
+    serializer_class = MovieSerializer
+
+    def get_queryset(self):
+        query = self.request.query_params.get('query', None)
+        if query:
+            return Movie.objects.filter(title__icontains=query)
+        return Movie.objects.none()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+def clean_movie_data(movie_data):
+    """Ensure release_date is properly formatted and accepts multiple formats."""
+    accepted_formats = ["%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d", "%d %b %Y", "%d %B %Y"]
+
+    if "release_date" in movie_data:
+        if not movie_data["release_date"]:  # If empty, set to None
+            movie_data["release_date"] = None
+        else:
+            for fmt in accepted_formats:
+                try:
+                    movie_data["release_date"] = datetime.strptime(movie_data["release_date"], fmt).date()
+                    return movie_data  # ✅ Stops once a valid format is found
+                except ValueError:
+                    continue
+            else:
+                movie_data["release_date"] = None  # ✅ If no formats matched, set to None
+
+    return movie_data
