@@ -30,6 +30,7 @@ class MovieSerializer(serializers.ModelSerializer):
     genres = GenreSerializer(many=True, read_only=True)
     cast = MovieCastSerializer(source='moviecast_set', many=True, read_only=True)
     crew = MovieCrewSerializer(source='moviecrew_set', many=True, read_only=True)
+    
     user_rating = serializers.SerializerMethodField()
     in_collection = serializers.SerializerMethodField()
 
