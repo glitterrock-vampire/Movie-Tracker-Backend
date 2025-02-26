@@ -1,28 +1,46 @@
+# movie_tracker/movies/urls.py
 from django.urls import path
 from . import views
+from rest_framework_simplejwt.views import (  # Import JWT token views
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+
+app_name = 'movies'  # Namespace for the app to avoid URL conflicts
 
 urlpatterns = [
-    # Movie routes
-    path('movies/search/', views.search_movies, name='search-movies'),
-    path('movies/<int:tmdb_id>/', views.get_movie_details, name='movie-details'),
-    path('movies/<int:tmdb_id>/recommendations/', views.get_movie_recommendations, name='movie-recommendations'),  # New endpoint
-    path('movies/popular/', views.get_popular_movies, name='popular-movies'),
-    path('movies/now_showing/', views.get_now_showing_movies, name='now-showing-movies'),
-    path('movies/<int:tmdb_id>/videos/', views.get_movie_videos, name='movie-videos'),  # NEW VIDEO ENDPOINT
-
-    # Collection routes
-    path('collection/', views.get_collection, name='get-collection'),
-    path('collection/<int:tmdb_id>/', views.add_to_collection, name='add-to-collection'),
-    path('collection/<int:tmdb_id>/remove/', views.remove_from_collection, name='remove-from-collection'),
+    # Authentication Endpoints
+    path('register/', views.register, name='register'),  # User registration
+    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),  # Obtain JWT tokens
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),  # Refresh JWT token
     
-    # Rating route
-    path('movies/<int:tmdb_id>/rate/', views.rate_movie, name='rate-movie'),
+    # Movie Search and Details
+    path('movies/search/', views.search_movies, name='search_movies'),  # Search movies by query
+    path('movies/<int:tmdb_id>/', views.get_movie_details, name='movie_details'),  # Get movie details by TMDB ID
+    path('movies/<int:tmdb_id>/videos/', views.get_movie_videos, name='movie_videos'),  # Get movie videos by TMDB ID
+    path('movies/<int:tmdb_id>/recommendations/', views.get_movie_recommendations, name='movie_recommendations'),  # Movie recommendations
     
-    # People routes
-    path('people/search/', views.search_people, name='search-people'),
-    path('people/<int:person_id>/movies/', views.get_movies_by_person, name='movies-by-person'),
+    # Movie Listings
+    path('movies/popular/', views.get_popular_movies, name='popular_movies'),  # Get popular movies
+    path('movies/now_showing/', views.get_now_showing_movies, name='now_showing_movies'),  # Get now showing movies
     
-    # Genre routes
-    path('genres/', views.get_genres, name='genres-list'),
-    path('genres/<int:genre_id>/movies/', views.get_movies_by_genre, name='movies-by-genre'),
+    # User Collection Management
+    path('collection/', views.get_collection, name='get_collection'),  # Get user's movie collection
+    path('collection/<int:tmdb_id>/', views.add_to_collection, name='add_to_collection'),  # Add movie to collection
+    path('collection/<int:tmdb_id>/remove/', views.remove_from_collection, name='remove_from_collection'),  # Remove movie from collection
+    path('movies/<int:tmdb_id>/rate/', views.rate_movie, name='rate_movie'),  # Rate a movie
+    
+    # People and Genres
+    path('people/search/', views.search_people, name='search_people'),  # Search people (actors, directors, etc.)
+    path('people/<int:person_id>/movies/', views.get_movies_by_person, name='movies_by_person'),  # Get movies by person
+    path('genres/', views.get_genres, name='genres'),  # List all genres
+    path('genres/<int:genre_id>/movies/', views.get_movies_by_genre, name='movies_by_genre'),  # Get movies by genre
+    
+    # Recommendations
+    path('recommendations/', views.get_recommendations, name='recommendations'),  # Get AI-driven recommendations
+    
+    # Advanced search endpoints - FIXED by removing 'api/' prefix
+    path('search/advanced/', views.advanced_movie_search, name='advanced_movie_search'),
+    path('search/companies/', views.search_companies, name='search_companies'),
+    path('movies/company/<int:company_id>/', views.get_movies_by_company, name='get_movies_by_company'),
 ]

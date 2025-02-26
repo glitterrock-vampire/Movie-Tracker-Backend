@@ -214,3 +214,20 @@ class TMDBService:
             return datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             return None
+    def search_companies(self, query, page=1):
+        """Search for production companies."""
+        return self._make_request(
+            'search/company',
+            {'query': query, 'page': page}
+        )
+
+    def get_company_details(self, company_id):
+        """Get details for a production company."""
+        return self._make_request(f'company/{company_id}')
+
+    def get_movies_by_company(self, company_id, page=1):
+        """Get movies from a specific production company."""
+        return self._make_request(
+            'discover/movie',
+            {'with_companies': company_id, 'page': page, 'sort_by': 'popularity.desc'}
+        )
