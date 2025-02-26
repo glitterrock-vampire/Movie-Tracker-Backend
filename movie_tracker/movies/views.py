@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from django.http import JsonResponse
 from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -49,6 +50,13 @@ def parse_recommendations(recommendations_text):
                 })
     return recommendations
 
+def health_check(request):
+    return JsonResponse({
+        "status": "online",
+        "message": "Movie Tracker API is running",
+        "database": "connected"
+    })
+    
 def get_movie_recommendations(user_collection):
     """Generate movie recommendations using OpenAI GPT based on user collection."""
     collection_details = [
@@ -950,3 +958,6 @@ def get_movies_by_genre(request, genre_id):
         })
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+    
+    from django.http import JsonResponse
+

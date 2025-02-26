@@ -1,6 +1,7 @@
 # movie_tracker/movies/urls.py
 from django.urls import path
 from . import views
+from .views import health_check
 from rest_framework_simplejwt.views import (  # Import JWT token views
     TokenObtainPairView,
     TokenRefreshView,
@@ -43,4 +44,6 @@ urlpatterns = [
     path('search/advanced/', views.advanced_movie_search, name='advanced_movie_search'),
     path('search/companies/', views.search_companies, name='search_companies'),
     path('movies/company/<int:company_id>/', views.get_movies_by_company, name='get_movies_by_company'),
+    
+    path('api/health/', health_check, name='health_check'),
 ]
