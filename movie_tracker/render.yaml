@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: movie-tracker
+    env: python
+    buildCommand: ./build.sh
+    startCommand: gunicorn movie_tracker.wsgi:application

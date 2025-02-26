@@ -1,16 +1,23 @@
 # movie_tracker/settings.py
+import os
+import dj_database_url
 from pathlib import Path
 from decouple import config
 from datetime import timedelta
-from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Security settings
-SECRET_KEY = config('SECRET_KEY', default='your-secret-key-here')
-DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = ['*']
-OMDB_API_KEY = config("OMDB_API_KEY", default=None)
+# Security and Deployment Settings
+SECRET_KEY = os.environ.get('SECRET_KEY', config('SECRET_KEY', default='your-fallback-secret-key'))
+DEBUG = os.environ.get('DEBUG', config('DEBUG', default='False')) == 'True'
+
+# Render Host Configuration
+ALLOWED_HOSTS = [
+    '.onrender.com', 
+    'localhost', 
+    '127.0.0.1'
+]
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -22,14 +29,16 @@ INSTALLED_APPS = [
     # Third party apps
     'rest_framework',
     'corsheaders',
-    'rest_framework_simplejwt',  # JWT support
-    'rest_framework_simplejwt.token_blacklist',  # For token blacklisting
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     # Local apps
     'movies',
 ]
 
+# Middleware Updates
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -42,16 +51,12 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'movie_tracker.urls'
 WSGI_APPLICATION = 'movie_tracker.wsgi.application'
 
-# Database settings
+# Database Configuration for Render
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME', default='movie_tracker_db'),
-        'USER': config('DB_USER', default='postgres'),
-        'PASSWORD': config('DB_PASSWORD', default='postgres'),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default='5432'),
-    }
+    'default': dj_database_url.config(
+        default=os.environ.get('DATABASE_URL', 'postgres://localhost/movie_tracker_db'),
+        conn_max_age=600
+    )
 }
 
 # Internationalization
@@ -60,19 +65,19 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# Static files
-STATIC_URL = 'static/'
+# Static Files Configuration
+STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-AUTH_USER_MODEL = 'movies.CustomUser'  
+AUTH_USER_MODEL = 'movies.CustomUser'
 
-# TMDB Settings
-TMDB_API_KEY = '84541b939d582820bbfeb26a219afaae'
+# API Keys from Environment Variables
+TMDB_API_KEY = os.environ.get('TMDB_API_KEY', config('TMDB_API_KEY', default=''))
 TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500'
 
-# OMDB API Key (for IMDb & Rotten Tomatoes ratings)
-OMDB_API_KEY = 'bb593a44'
+OMDB_API_KEY = os.environ.get('OMDB_API_KEY', config('OMDB_API_KEY', default=''))
 
 # REST Framework settings
 REST_FRAMEWORK = {
@@ -81,7 +86,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',  # Change this from IsAuthenticated
+        'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20
@@ -95,17 +100,20 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     'USER_ID_FIELD': 'id', 
     'USER_ID_CLAIM': 'user_id', 
-    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',  # Add this line
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
 }
 
-# CORS settings
-if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
-else:
+# CORS and Security Settings
+if not DEBUG:
     CORS_ALLOWED_ORIGINS = [
-        "http://localhost:3000",  # React frontend
-        # Add your production frontend URL here
+        "https://your-frontend-domain.onrender.com",
+        "http://your-frontend-domain.onrender.com"
     ]
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 # Templates
 TEMPLATES = [
