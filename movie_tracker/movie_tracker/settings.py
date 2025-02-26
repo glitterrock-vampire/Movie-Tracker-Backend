@@ -9,14 +9,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Security and Deployment Settings
 SECRET_KEY = os.environ.get('SECRET_KEY', config('SECRET_KEY', default='your-fallback-secret-key'))
-DEBUG = os.environ.get('DEBUG', config('DEBUG', default='False')) == 'True'
-
+DEBUG = config('DEBUG', default='False').lower() == 'true'
 # Render Host Configuration
-ALLOWED_HOSTS = [
-    '.onrender.com', 
-    'localhost', 
-    '127.0.0.1'
-]
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='.onrender.com,localhost,127.0.0.1').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -54,7 +49,7 @@ WSGI_APPLICATION = 'movie_tracker.wsgi.application'
 # Database Configuration for Render
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL', 'postgres://localhost/movie_tracker_db'),
+        default=config('DATABASE_URL', default=''),
         conn_max_age=600
     )
 }
@@ -68,6 +63,7 @@ USE_TZ = True
 # Static Files Configuration
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+INSTALLED_APPS.insert(1, 'whitenoise.runserver_nostatic') 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'movies.CustomUser'
@@ -77,8 +73,7 @@ TMDB_API_KEY = os.environ.get('TMDB_API_KEY', config('TMDB_API_KEY', default='')
 TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500'
 
-OMDB_API_KEY = os.environ.get('OMDB_API_KEY', config('OMDB_API_KEY', default=''))
-
+OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
 # REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -104,17 +99,13 @@ SIMPLE_JWT = {
 }
 
 # CORS and Security Settings
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default="http://localhost:3000").split(',')
+
 if not DEBUG:
-    CORS_ALLOWED_ORIGINS = [
-        "https://your-frontend-domain.onrender.com",
-        "http://your-frontend-domain.onrender.com"
-    ]
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_SECURE = True
     SECURE_SSL_REDIRECT = True
-else:
-    CORS_ALLOW_ALL_ORIGINS = True
-
+    
 # Templates
 TEMPLATES = [
     {
