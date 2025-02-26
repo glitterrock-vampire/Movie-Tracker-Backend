@@ -231,3 +231,52 @@ class TMDBService:
             'discover/movie',
             {'with_companies': company_id, 'page': page, 'sort_by': 'popularity.desc'}
         )
+def get_movie_external_ratings(self, tmdb_id):
+    """Fetch external ratings (IMDb, Rotten Tomatoes) from TMDB or OMDB."""
+    try:
+        # Ensure OMDB API Key is set in settings
+        omdb_api_key = getattr(settings, "OMDB_API_KEY", None)
+        if not omdb_api_key:
+            print("OMDB API Key is missing in settings.")
+            return {"imdb": None, "rotten_tomatoes": None}
+
+        # Get external IDs (including IMDb ID) from TMDB
+        external_data = self._make_request(f"movie/{tmdb_id}/external_ids")
+        imdb_id = external_data.get("imdb_id")
+
+        if not imdb_id:
+            print(f"IMDb ID not found for TMDB ID: {tmdb_id}")
+            return {"imdb": None, "rotten_tomatoes": None}
+
+        try:
+            # Request IMDb and Rotten Tomatoes ratings from OMDB
+            response = requests.get(
+                "http://www.omdbapi.com/",
+                params={"i": imdb_id, "apikey": omdb_api_key},
+                timeout=5  # Set a timeout to avoid hanging requests
+            )
+            response.raise_for_status()  # Raise an error for bad responses
+            omdb_data = response.json()
+
+            # Extract IMDb rating
+            imdb_rating = float(omdb_data.get("imdbRating", 0)) if "imdbRating" in omdb_data else None
+
+            # Extract Rotten Tomatoes rating
+            rotten_tomatoes_rating = None
+            for rating in omdb_data.get("Ratings", []):
+                if rating["Source"] == "Rotten Tomatoes":
+                    rotten_tomatoes_rating = int(rating["Value"].replace("%", ""))
+                    break
+
+            return {
+                "imdb": imdb_rating,
+                "rotten_tomatoes": rotten_tomatoes_rating
+            }
+
+        except requests.RequestException as e:
+            print(f"OMDB API request failed: {e}")
+            return {"imdb": None, "rotten_tomatoes": None}
+
+    except Exception as e:
+        print(f"Error fetching external ratings: {e}")
+        return {"imdb": None, "rotten_tomatoes": None}

@@ -178,12 +178,16 @@ class MovieSearchView(generics.ListAPIView):
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
-@api_view(['GET'])
+        return Response(serializer.data)@api_view(['GET'])
 def get_movie_details(request, tmdb_id):
+    """
+    Retrieves movie details, updates external ratings (IMDb, Rotten Tomatoes),
+    and returns the user's personal rating (if authenticated).
+    """
     tmdb = TMDBService()
     try:
         try:
+            # Check if the movie already exists
             movie = Movie.objects.get(tmdb_id=tmdb_id)
             needs_update = True
         except Movie.DoesNotExist:
@@ -192,6 +196,10 @@ def get_movie_details(request, tmdb_id):
                 movie_data = tmdb._make_request(f'movie/{tmdb_id}')
                 credits_data = tmdb._make_request(f'movie/{tmdb_id}/credits')
                 
+                # Fetch external ratings
+                external_ratings = tmdb.get_movie_external_ratings(tmdb_id)
+
+                # Create a new Movie object
                 movie = Movie.objects.create(
                     tmdb_id=tmdb_id,
                     title=movie_data['title'],
@@ -199,15 +207,18 @@ def get_movie_details(request, tmdb_id):
                     poster_path=movie_data.get('poster_path', ''),
                     backdrop_path=movie_data.get('backdrop_path', ''),
                     release_date=movie_data.get('release_date'),
-                    vote_average=movie_data.get('vote_average')
+                    vote_average=movie_data.get('vote_average'),
+                    imdb_rating=external_ratings.get('imdb', None),
+                    rotten_tomatoes_rating=external_ratings.get('rotten_tomatoes', None),
                 )
                 
+                # Add genres
                 for genre_data in movie_data.get('genres', []):
                     genre, _ = Genre.objects.get_or_create(tmdb_id=genre_data['id'], defaults={'name': genre_data['name']})
                     movie.genres.add(genre)
                 
+                # Add Cast
                 for cast_data in credits_data.get('cast', [])[:10]:
-                    # Ensure profile_path is never None/null
                     profile_path = cast_data.get('profile_path', '') or ''
                     person, _ = Person.objects.get_or_create(
                         tmdb_id=cast_data['id'],
@@ -215,15 +226,16 @@ def get_movie_details(request, tmdb_id):
                     )
                     MovieCast.objects.create(movie=movie, person=person, character=cast_data['character'], order=cast_data['order'])
                 
+                # Add Crew
                 for crew_data in credits_data.get('crew', []):
                     if crew_data['job'] in ['Director', 'Screenplay', 'Writer']:
-                        # Ensure profile_path is never None/null
                         profile_path = crew_data.get('profile_path', '') or ''
                         person, _ = Person.objects.get_or_create(
                             tmdb_id=crew_data['id'],
                             defaults={'name': crew_data['name'], 'profile_path': profile_path}
                         )
                         MovieCrew.objects.create(movie=movie, person=person, job=crew_data['job'], department=crew_data['department'])
+                
                 needs_update = False
             except Exception as api_error:
                 print(f"TMDB API Error: {str(api_error)}")
@@ -235,24 +247,32 @@ def get_movie_details(request, tmdb_id):
                 movie_data = tmdb._make_request(f'movie/{tmdb_id}')
                 credits_data = tmdb._make_request(f'movie/{tmdb_id}/credits')
                 
+                # Fetch external ratings
+                external_ratings = tmdb.get_movie_external_ratings(tmdb_id)
+
+                # Update movie details
                 movie.title = movie_data['title']
                 movie.overview = movie_data.get('overview', '')
                 movie.poster_path = movie_data.get('poster_path', '')
                 movie.backdrop_path = movie_data.get('backdrop_path', '')
                 movie.release_date = movie_data.get('release_date')
                 movie.vote_average = movie_data.get('vote_average')
+
+                # Update External Ratings
+                movie.imdb_rating = external_ratings.get('imdb', movie.imdb_rating)
+                movie.rotten_tomatoes_rating = external_ratings.get('rotten_tomatoes', movie.rotten_tomatoes_rating)
+
                 movie.save()
                 
+                # Update genres
                 movie.genres.clear()
                 for genre_data in movie_data.get('genres', []):
                     genre, _ = Genre.objects.get_or_create(tmdb_id=genre_data['id'], defaults={'name': genre_data['name']})
                     movie.genres.add(genre)
                 
+                # Update Cast
                 MovieCast.objects.filter(movie=movie).delete()
-                MovieCrew.objects.filter(movie=movie).delete()
-                
                 for cast_data in credits_data.get('cast', [])[:10]:
-                    # Ensure profile_path is never None/null
                     profile_path = cast_data.get('profile_path', '') or ''
                     person, _ = Person.objects.get_or_create(
                         tmdb_id=cast_data['id'],
@@ -260,9 +280,10 @@ def get_movie_details(request, tmdb_id):
                     )
                     MovieCast.objects.create(movie=movie, person=person, character=cast_data['character'], order=cast_data['order'])
                 
+                # Update Crew
+                MovieCrew.objects.filter(movie=movie).delete()
                 for crew_data in credits_data.get('crew', []):
                     if crew_data['job'] in ['Director', 'Screenplay', 'Writer']:
-                        # Ensure profile_path is never None/null
                         profile_path = crew_data.get('profile_path', '') or ''
                         person, _ = Person.objects.get_or_create(
                             tmdb_id=crew_data['id'],
@@ -272,13 +293,64 @@ def get_movie_details(request, tmdb_id):
             except Exception as api_error:
                 print(f"TMDB API Error during update: {str(api_error)}")
                 # Continue with the existing movie data rather than failing completely
-        
-        serializer = MovieSerializer(movie, context={'request': request})
-        return Response(serializer.data)
+
+        # Retrieve user rating (if authenticated)
+        user_rating = None
+        if request.user.is_authenticated:
+            user_movie = UserMovie.objects.filter(user=request.user, movie=movie).first()
+            user_rating = user_movie.rating if user_movie else None
+
+        # Serialize and return response
+        return Response({
+            "tmdb_id": movie.tmdb_id,
+            "title": movie.title,
+            "overview": movie.overview,
+            "poster_path": movie.poster_path,
+            "backdrop_path": movie.backdrop_path,
+            "release_date": movie.release_date,
+            "vote_average": movie.vote_average,
+            "imdb_rating": movie.imdb_rating,
+            "rotten_tomatoes_rating": movie.rotten_tomatoes_rating,
+            "user_rating": user_rating,
+        })
     
     except Exception as e:
         print(f"Movie details error: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def rate_movie(request, tmdb_id):
+    """
+    Allows an authenticated user to rate a movie (1-5 stars).
+    If the movie is already rated, update the rating instead.
+    """
+    try:
+        movie = Movie.objects.get(tmdb_id=tmdb_id)
+    except Movie.DoesNotExist:
+        return Response({"error": "Movie not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Get the rating from request data
+    rating = request.data.get("rating")
+    
+    if not rating or not isinstance(rating, (int, float)) or not (1 <= rating <= 5):
+        return Response({"error": "Rating must be between 1 and 5"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check if the user already rated the movie
+    user_movie, created = UserMovie.objects.get_or_create(
+        user=request.user,
+        movie=movie,
+        defaults={"rating": rating}
+    )
+
+    if not created:
+        user_movie.rating = rating
+        user_movie.save()
+
+    return Response(
+        {"message": "Rating saved successfully", "user_rating": user_movie.rating},
+        status=status.HTTP_200_OK
+    )
 @api_view(['GET'])
 def advanced_movie_search(request):
     """

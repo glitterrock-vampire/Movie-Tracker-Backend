@@ -2,6 +2,7 @@
 from pathlib import Path
 from decouple import config
 from datetime import timedelta
+from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -9,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='your-secret-key-here')
 DEBUG = config('DEBUG', default=True, cast=bool)
 ALLOWED_HOSTS = ['*']
-
+OMDB_API_KEY = config("OMDB_API_KEY", default=None)
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -69,6 +70,9 @@ AUTH_USER_MODEL = 'movies.CustomUser'
 TMDB_API_KEY = '84541b939d582820bbfeb26a219afaae'
 TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500'
+
+# OMDB API Key (for IMDb & Rotten Tomatoes ratings)
+OMDB_API_KEY = 'bb593a44'
 
 # REST Framework settings
 REST_FRAMEWORK = {
