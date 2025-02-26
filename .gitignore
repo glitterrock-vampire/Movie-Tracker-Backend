@@ -1,5 +1,19 @@
+# Virtual environment
+backendvenv/
 venv/
 __pycache__/
 *.pyc
-.env
+*.pyo
+*.pyd
 .DS_Store
+*.log
+*.sqlite3
+
+# Static files (if not tracked, Render will handle via WhiteNoise)
+staticfiles/
+
+# Zip files and archives
+*.zip
+
+# Ignore .gitign if redundant
+.gitign
