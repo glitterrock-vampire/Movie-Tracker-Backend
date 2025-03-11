@@ -81,6 +81,7 @@ class MovieCast(models.Model):
     
     class Meta:
         unique_together = ('movie', 'person', 'character')
+
 # ✅ MovieCrew Model (Directors, Writers, etc.)
 class MovieCrew(models.Model):
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name="movie_crew")  # ✅ Explicit related_name
